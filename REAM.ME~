@@ -1,9 +1,0 @@
-redis.c : normal used lastest version
-
-remove device:* as a device, please use uuid instead
-remove device:x:events list
-
-
-redis(v2).c : exists some Redundant, only one device_state allowed
-
-redis_multi.c  : allow multi device_state 

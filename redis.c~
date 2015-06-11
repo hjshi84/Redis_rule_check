@@ -11,7 +11,7 @@
 #include <errno.h>  
 #include "redis.h"
 #include "md5.h"
-
+#include "cJSON.h"
 //"127.0.0.1"
 //"10.200.46.245"
 
@@ -52,119 +52,254 @@ void doTestSub()
 
 }
 
-
-
-void doTestIot()
-{	
-	long long int ID;
-	//get redisContext
-	redisContext* context = redisConnect("127.0.0.1", 6379);  
-	if ( context->err)  
-	{  
-		redisFree(context);  
-		printf("Connect to redisServer faile\n");  
-		return ;  
-	}  
-        printf("Connect to redisServer Success\n");  
-	redisReply *r;
-	r = redisCommand(context, "INCR deviceID");
-	if( NULL == r)  
-	{  
-		printf("Execut command1 failure\n");  
-		redisFree(context);  
-		return;  
-	}  
-	if( !(r->type == REDIS_REPLY_INTEGER ))  
-	{  
-		printf("Failed to execute command[]\n");  
-		freeReplyObject(r);  
-		redisFree(context);  
-		return;  
-	}     
-
-	ID=r->integer;
-	printf("\n%lld\n",r->integer);
-    	freeReplyObject(r);  
-
-	//use pipeline
-	//hash insert
+void add_event(char *event_info)
+{
+	cJSON *event=cJSON_Parse(event_info);
+	
+	//get event hash id 
+	cJSON *uid=cJSON_GetObjectItem(event,"uid");
+	cJSON *state=cJSON_GetObjectItem(event,"state");
+	
+	char *total=(char *)calloc(strlen(uid->valuestring)+strlen(state->valuestring)+1,sizeof(char));
+	strcat(total,uid->valuestring);
+	strcat(total,state->valuestring);
+	
+	//get rule identification code
+	char *event_hash=NULL;
+	event_hash=get_hash_value(total);
+	printf("total is:%s\n",total);
+	printf("event id is:%s\n",event_hash);
+	free(total);
+	
+	//check if hash exists
 	redisReply *reply;
+	reply= (redisReply*)redisCommand(context, "sismember event:list %s",event_hash);
+	if (reply->integer==1)
+	{
+		printf("There is already an event in DB. Please change the config!\n");
 
+		free(event_hash);
+		return;
+	}
+	freeReplyObject(reply);
+	
+	//if not exists
 
-	redisAppendCommand(context,"hset device:%lld states %lld",ID,ID);
-	redisAppendCommand(context,"hget device:%lld states",ID);
-	redisAppendCommand(context,"hget device:%lld states",ID);
-	redisGetReply(context,(void **)&reply); // reply for SET
-	freeReplyObject(reply);
-	redisGetReply(context,(void **)&reply); // reply for GET
-	freeReplyObject(reply);
+	int event_num=cJSON_GetArraySize(event);
+	cJSON *attr;
+	int i=0;
+	redisAppendCommand(context, "sadd event:list %s",event_hash);
+	redisAppendCommand(context, "hset device:%s:stateslist %s %s",uid->valuestring,state->valuestring,event_hash);
+	for(;i<event_num;i++)
+	{
+		attr=cJSON_GetArrayItem(event,i);
+		redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr->valuestring);	
+	
+	}
+	
+	
+	for(i=0;i<event_num+2;i++)
+	{
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+	}
+	
+
+	free(event_hash);
+	cJSON_Delete(event);
 }
 
-void add_rules(int argc,char *argv[])
+void add_action(char *action_info)
 {
-	char *result=NULL;
-	result=get_hash_value(argc, argv);
-	printf("%s",result);
-	free(result);
-	long long rule_id=0l;
-	//get events and actions and add them to redis
-	int i=0;//if from normal main the first argument is ./redis, from signal no ./redis
+	cJSON *action=cJSON_Parse(action_info);
+	
+	//get action hash id 
+	cJSON *url=cJSON_GetObjectItem(action,"url");
+	cJSON *body=cJSON_GetObjectItem(action,"body");
+	
+	char *total=(char *)malloc(sizeof(char *)*(strlen(url->valuestring)+strlen(body->valuestring)+1));
+	strcat(total,url->valuestring);
+	strcat(total,body->valuestring);
+	
+	//get rule identification code
+	char *action_hash=NULL;
+	action_hash=get_hash_value(total);
+	printf("action id is:%s\n",action_hash);
+	free(total);
+	
+	//check if hash exists
+	redisReply *reply;
+	reply= (redisReply*)redisCommand(context, "sismember action:list %s",action_hash);
+	if (reply->integer==1)
+	{
+		printf("There is already an action in DB. Please change the config!\n");
+
+		free(action_hash);
+		return;
+	}
+	freeReplyObject(reply);
+	
+	//if not exists
+
+	int action_num=cJSON_GetArraySize(action);
+	cJSON *attr;
+	int i=0;
+	redisAppendCommand(context, "sadd action:list %s",action_hash);
+	redisAppendCommand(context, "hset device:%s:stateslist %s %s",url->valuestring,body->valuestring,action_hash);
+	for(;i<action_num;i++)
+	{
+		attr=cJSON_GetArrayItem(action,i);
+		redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,attr->valuestring);	
+
+	}
+	
+	for(i=0;i<action_num+2;i++)
+	{
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+	}
+	
+	cJSON_Delete(action);
+	free(action_hash);
+}
+
+void add_rules(char *rule_info)
+{
+
+	int i=0;
 	redisReply* r;	
 	
-	redisAppendCommand(context, "incr rule:id"); 
-	redisGetReply(context,(void **)&r);
-	rule_id=r->integer;
-	printf("rule id is :%lld\n",rule_id);
-	freeReplyObject(r);
+	//get rule info, should be one once , however write multi rules comes in together
+	cJSON *rule=cJSON_Parse(rule_info);
+	int rule_num=cJSON_GetArraySize(rule);
 	
-	for(;i<argc;)
+	
+	//get events and actions and add them to redis
+	
+	for(i=0;i<rule_num;i++)
 	{
+		//each rule contains multi events and actions
+		cJSON *rule_content=cJSON_GetArrayItem(rule,i);
 		
-		if (1)
+		//get events, and actions and get the hashvalue
+		cJSON *events=cJSON_GetObjectItem(rule_content,"events");
+		cJSON *actions=cJSON_GetObjectItem(rule_content,"actions");
+		char *temp_events=cJSON_PrintUnformatted(events);
+		char *temp_actions=cJSON_PrintUnformatted(actions);
+		char *total=(char *)malloc(sizeof(char *)*(strlen(temp_events)+strlen(temp_actions)+1));
+		strcat(total,temp_events);
+		strcat(total,temp_actions);
+		
+		//get rule identification code
+		char *rule_hash=NULL;
+		rule_hash=get_hash_value(total);
+		printf("rule id is:%s\n",rule_hash);
+		free(total);
+		
+		//check if rule exists
+		redisReply *reply;
+		reply= (redisReply*)redisCommand(context, "sismember rule:list %s",rule_hash);
+		if (reply->integer==1)
 		{
-			long long event_id;
-			//form device:id:stateslist to judge whether a event need to be added
-			redisAppendCommand(context, "HEXISTS device:%s:stateslist %s",argv[i],argv[i+1]);
-			redisGetReply(context,(void **)&r);
-			int res=r->integer;
-			freeReplyObject(r);
-			if (res==0)
-			{
-			
-				redisAppendCommand(context, "incr events:id");
-				redisGetReply(context,(void **)&r);
-				event_id=r->integer;
-				freeReplyObject(r);
-				
-				redisAppendCommand(context, "hset device:%s:stateslist %s %lld",argv[i],argv[i+1],event_id);
-				redisAppendCommand(context, "hset events:%lld %s %s",event_id,argv[i],argv[i+1]);
-				
-				redisGetReply(context,(void **)&r);
-				freeReplyObject(r);
-				redisGetReply(context,(void **)&r);
-				freeReplyObject(r);
-			}
-			else if (res==1)
-			{
-				redisAppendCommand(context, "hget device:%s:stateslist %s",argv[i],argv[i+1]);
-				redisGetReply(context,(void **)&r);
-				event_id=atoi(r->str);
-				freeReplyObject(r);
-			}				
-			redisAppendCommand(context, "sadd events:%lld:rules %lld",event_id,rule_id);
-			redisAppendCommand(context, "sadd rule:%lld:events %lld",rule_id,event_id);
-
-			redisGetReply(context,(void **)&r);
-			freeReplyObject(r);
-			redisGetReply(context,(void **)&r);
-			freeReplyObject(r);
-			i=i+2;
+			printf("There is already an Rule in DB. Please change the config!\n");
+			cJSON_Delete(rule);
+			free(rule_hash);
 			continue;
 		}
+		freeReplyObject(reply);
+		
+		//add rule related info to the redis
+		
+		int total_info_set=cJSON_GetArraySize(rule_content);
+		int j=0;
+		int k=0;
+		for(;j<total_info_set;j++)
+		{
+			cJSON *info_body=cJSON_GetArrayItem(rule_content,j);
+			char *name=info_body->string;
+			char *value=info_body->valuestring;
+			
+			if(!strcmp(name,"events")||!strcmp(name,"actions"))
+			{
+				continue;
+			}
+			else
+			{
+				//add other info to redis
+				k++;
+				redisAppendCommand(context, "hset rule:%s:value %s %s",rule_hash,name,value);
+			}
+		}
+		
+		for(j=0;j<k;j++)
+		{
+			redisGetReply(context,(void **)&reply);
+			freeReplyObject(reply);
+		}
+		
+		//add events and actions to redis
+		//add events
+		int total_event_num=cJSON_GetArraySize(events);
+		for(j=0;j<total_event_num;j++)
+		{
+			cJSON *each_event=cJSON_GetArrayItem(events,j);
+			cJSON *event_hash=cJSON_GetObjectItem(each_event,"id");
+			
+			int each_event_argc=cJSON_GetArraySize(each_event);
+			int temp_cal=0;
+			for(;temp_cal<each_event_argc;temp_cal++)
+			{
+				cJSON *info_body=cJSON_GetArrayItem(each_event,temp_cal);
+				char *name=info_body->string;
+				char *value=info_body->valuestring;
 
+				redisAppendCommand(context, "hset event:%s:value %s %s",event_hash->valuestring,name,value);
+			}
+			redisAppendCommand(context, "sadd event:%s:rules %s",event_hash->valuestring,rule_hash);
+			redisAppendCommand(context, "sadd rule:%s:events %s",rule_hash,event_hash->valuestring);
+			
+			for(temp_cal=0;temp_cal<each_event_argc+2;temp_cal++)
+			{
+				redisGetReply(context,(void **)&reply);
+				freeReplyObject(reply);
+			}
+			
+		}
+		
+		//add actions
+		int total_action_num=cJSON_GetArraySize(actions);
+		for(j=0;j<total_action_num;j++)
+		{
+			cJSON *each_action=cJSON_GetArrayItem(actions,j);
+			cJSON *action_hash=cJSON_GetObjectItem(each_action,"id");
+			
+			int each_action_argc=cJSON_GetArraySize(each_action);
+			int temp_cal=0;
+			for(;temp_cal<each_action_argc;temp_cal++)
+			{
+				cJSON *info_body=cJSON_GetArrayItem(each_action,temp_cal);
+				char *name=info_body->string;
+				char *value=info_body->valuestring;
+
+				redisAppendCommand(context, "hset action:%s:value %s %s",action_hash->valuestring,name,value);
+			}
+
+			redisAppendCommand(context, "sadd rule:%s:actions %s",rule_hash,action_hash->valuestring);
+			
+			for(temp_cal=0;temp_cal<each_action_argc+1;temp_cal++)
+			{
+				redisGetReply(context,(void **)&reply);
+				freeReplyObject(reply);
+			}
+			
+	
+		}
+		
+
+	
 	}	
 	
-	
+	cJSON_Delete(rule);
 }
 
 void rule_detect(const char* event_id){
@@ -189,93 +324,119 @@ void rule_detect(const char* event_id){
     	
 }
 
-void device_state_income(const char* uid,const char* state)
+void device_state_income(const char* device_info)//const char* uid,const char* state)
 {
-	printf("uid is %s, state is %s\n\n\n\n",uid,state);
-	const char* command1;
-	char* event_id=NULL;
-	int pass=0;//pass the repeat check;
-	redisReply* r;
+	cJSON *json=cJSON_Parse(device_info);
+	//only one device state will come at each time! however we try to catch one more json 
+	int device_all=cJSON_GetArraySize(json);
+	int temp_loc=0;
+	for(;temp_loc<device_all;temp_loc++)
+	{
+		cJSON *temp_dev=cJSON_GetArrayItem(json,temp_loc);
+		cJSON *temp_uid=cJSON_GetObjectItem(temp_dev,"uid");
+		cJSON *temp_state=cJSON_GetObjectItem(temp_dev,"state");
+		char *uid=temp_uid->valuestring;
+		char *state=temp_state->valuestring;
+		printf("uid is %s, state is %s\n\n\n\n",uid,state);
+		const char* command1;
+		char* event_id=NULL;
+		int pass=0;//pass the repeat check;
+		redisReply* r;
 
-	//judge if it is a new dievice,eg. "device:001"
-	redisAppendCommand(context, "keys device:%s",uid);
-	redisAppendCommand(context, "hget device:%s state",uid);
-	redisAppendCommand(context, "hset device:%s state %s",uid,state);
-	redisGetReply(context,(void **)&r);
-	
-	////r = (redisReply*)redisCommand(context, "keys %s",uid); 
-	//there exist a wrong need be checked that if device:100 is not hash,then comes the error need delete!
-	if(r->type==REDIS_REPLY_ARRAY&&r->elements==0)
-	{
-		printf("first discovered device!!!\n");
-		pass=1;
-	}
-	freeReplyObject(r);
-	
-	//search table device:ID:events
-	redisGetReply(context,(void **)&r);
-	////r = (redisReply*)redisCommand(context, "hget %s state",uid); 
-	if (!pass&&!strcmp(r->str,state))
-	{
-		printf("nothing changed!!\n");
-		freeReplyObject(r);
+		redisAppendCommand(context, "keys device:%s",uid);
+		redisAppendCommand(context, "hget device:%s state",uid);
+		//redisAppendCommand(context, "hset device:%s state %s",uid,state);
 		redisGetReply(context,(void **)&r);
+
+		if(r->type==REDIS_REPLY_ARRAY&&r->elements==0)
+		{
+			printf("first discovered device!!!\n");
+			pass=1;
+		}
 		freeReplyObject(r);
-		return;
-	}
-	freeReplyObject(r);
 	
-	redisGetReply(context,(void **)&r);
-	freeReplyObject(r);
-	
-    
-	////redisAppendCommand(context, "SDIFFSTORE active:events active:events %s:events",uid);
-	redisAppendCommand(context, "HGETALL device:%s:stateslist",uid);
-	
-	////redisGetReply(context,(void **)&r);
-	////freeReplyObject(r);
+		redisGetReply(context,(void **)&r);
 
-	redisGetReply(context,(void **)&r);
-	int i=0;
-	int res=0;
-	int num=r->elements;
-	for(;i<num;i=i+2)
-	{
-		char *vals=(r->element[i])->str;
-		char *event_vals=(r->element[i+1])->str;
-		if(res==0&&!strcmp(vals,state))
+		if (!pass&&!strcmp(r->str,state))
 		{
-			event_id=(char *)malloc(sizeof(char)*(strlen(event_vals)+1));
-			strcpy(event_id,event_vals);
-			res=1;
-			redisAppendCommand(context, "SADD active:events %s",event_id);
+			printf("nothing changed!!\n");
+			freeReplyObject(r);
+			redisGetReply(context,(void **)&r);
+			freeReplyObject(r);
+			return;
 		}
-		else
-		{
-			redisAppendCommand(context, "SREM active:events %s",event_vals);
-		}
+		freeReplyObject(r);
+
 		
-	}
+		//add otherinfo of device if first add
+		if(pass)
+		{
+			int whole_info=cJSON_GetArraySize(temp_dev);
+			int tempv=0;
+			for(;tempv<whole_info;tempv++)
+			{
+				cJSON *temp_json=cJSON_GetArrayItem(temp_dev,tempv);
+				char *json_name=temp_json->string;
+				char *json_value=temp_json->valuestring;
+				redisAppendCommand(context, "hset device:%s %s %s",uid,json_name,json_value);
+			
+				
+			}
+			tempv=0;
+			redisReply* temp_r;
+			for(;tempv<whole_info;tempv++)
+			{
+				redisGetReply(context,(void **)&temp_r);
+				freeReplyObject(temp_r);
+			}
+		}
 	
-	freeReplyObject(r);
-	
-	for(i=0;i<num;i=i+2)
-	{
-		redisReply *reply;
-		redisGetReply(context,(void **)&reply);
-		freeReplyObject(reply);
-	}
-	
-	
-	if (event_id!=NULL)	
-	{
-		redisReply *reply=(redisReply*)redisCommand(context, "SADD active:events %s",event_id);
-		freeReplyObject(reply);
-		rule_detect(event_id);
-	}
-	
-	free(event_id);
+		redisAppendCommand(context, "HGETALL device:%s:stateslist",uid);
 
+
+		redisGetReply(context,(void **)&r);
+		int i=0;
+		int res=0;
+		int num=r->elements;
+		for(;i<num;i=i+2)
+		{
+			char *vals=(r->element[i])->str;
+			char *event_vals=(r->element[i+1])->str;
+			if(res==0&&!strcmp(vals,state))
+			{
+				event_id=(char *)malloc(sizeof(char)*(strlen(event_vals)+1));
+				strcpy(event_id,event_vals);
+				res=1;
+				redisAppendCommand(context, "SADD active:events %s",event_id);
+			}
+			else
+			{
+				redisAppendCommand(context, "SREM active:events %s",event_vals);
+			}
+		
+		}
+	
+		freeReplyObject(r);
+	
+		for(i=0;i<num;i=i+2)
+		{
+			redisReply *reply;
+			redisGetReply(context,(void **)&reply);
+			freeReplyObject(reply);
+		}
+	
+	
+		if (event_id!=NULL)	
+		{
+			redisReply *reply=(redisReply*)redisCommand(context, "SADD active:events %s",event_id);
+			freeReplyObject(reply);
+			rule_detect(event_id);
+		}
+	
+		free(event_id);
+	
+	}
+	cJSON_Delete(json);
 }
 
 int createConnect()
@@ -283,13 +444,13 @@ int createConnect()
 	if (context==NULL)
 	{
 		printf("a new connection!!\n");
-		//context = redisConnect("127.0.0.1", 6379);  
-		context = redisConnect("10.200.43.146", 6379);  
+		context = redisConnect("127.0.0.1", 6379);  
+		//context = redisConnect("10.200.43.146", 6379);  
 		if ( context->err)  
 		{  
 			redisFree(context);  
 			printf("Connect to redisServer faile\n");  
-			return 0;  
+			return -1;  
 		}
 		redisReply *reply;
 		redisAppendCommand(context, "AUTH redis");
@@ -307,6 +468,7 @@ int createConnect()
 	}
 	
 }
+
 
 int closeConnect()
 {
@@ -338,7 +500,7 @@ int copestring(char **dest,char *ori)
         10: close
         **/
         
-/*int main(int argc,char *argv[])  
+int main(int argc,char *argv[])  
 {  
 	
 	createConnect();
@@ -348,10 +510,15 @@ int copestring(char **dest,char *ori)
     	double t_start,t_end;
     	
     	t_start=clock();
-    	if(argc==3)
-		device_state_income(argv[1],argv[2]);    
+	add_event("{\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
+	add_event("{\"type\":\"PIR\",\"uid\":\"002\",\"state\":\"1\",\"admin\":\"aaa\"}");
+	//add_action("{\"url\":\"hjshi84@163.com\",\"body\":\"give my five\",\"others\":\"things\",\"admin\":\"aaa\"}");
+	add_rules("[{\"name\": \"1\",\"events\": [{\"uid\":\"001\",\"id\":\"ae2bac2e4b4da805d01b2952d7e35ba4\",\"name\":\"1\"},{\"uid\":\"002\",\"id\":\"d9f5e405a7f74ed652a8f0b31a87f636\",\"name\":\"2\"}],\"actions\": [{\"id\":\"1\", \"name\":\"action_a\"},{\"id\":\"5\", \"name\":\"action_b\"}] ,\"enable\": \"0\",\"repeatable\": \"0\",\"time_constr\":  \"this\",\"admin\": \"admin@inesa.com\"}]");
+	////device_state_income("[{\"name\":\"People%20In\",\"uid\":\"10.200.45.148\",\"state\":\"100\"}]");    
+	//device_state_income("[{\"name\":\"People%20In\",\"uid\":\"001\",\"state\":\"1\"}]"); 
+	//device_state_income("[{\"name\":\"People%20In\",\"uid\":\"002\",\"state\":\"1\"}]"); 
 	t_end=clock();
-*/	
+	
 	/**/
 	
 	
@@ -359,19 +526,23 @@ int copestring(char **dest,char *ori)
 	add_rules(argc,argv);
 	t_end=clock();
 	/**/
-/*	
+	
 	
  	printf("%lf\n", (double)(t_end-t_start)/CLOCKS_PER_SEC);
  	//closeConnect();
 	return 0;  
 }  
-*/
 
+
+/*//use pip
 int main(int argc,char *argv[])  
 {
 
-	double t_start,t_end;
-	createConnect();
+	if (createConnect()==-1)
+	{
+		printf("Cannot Connect To Redis Server! Please Check Your Connection!\n");
+		return -1;
+	}
 	
 	int ret;  
         int msg_id;  
@@ -382,108 +553,63 @@ int main(int argc,char *argv[])
                 closeConnect();
                 return -1;  
         }  
-        
-        printf("msg_id:%d\n",msg_id);  
+
         msg_buf mb;  
 
-        int msg_stat=0;
-        char *device_uid=NULL;
-        char *status=NULL;
-        char **devstate=NULL;
-        int devnum=0;
-        int start=0;
+	char *content;
   	while(1)
   	{
 		ret = msgrcv(msg_id,(void *)&mb, sizeof(((msg_buf *)0)->msg),0,0);  
-		if(start==0)
-			t_start=clock();
-		start++;
-		if(start==20000){
-			t_end=clock();
-			break;
-		}
 		if(ret == -1){  
 		        printf("msgrcv failed:%d\n",errno);  
 		        closeConnect();
 		        return -1;  
 		}  
-		if (msg_stat==0)
-		{
-			if(mb.msg_type==3)
-			{	
-				msg_stat=1;
-				if(device_uid!=NULL)	
-					free(device_uid);
-				copestring(&device_uid,mb.msg);
-				continue;
-			}
-			else if (mb.msg_type==4)
-			{	
-				msg_stat=4;	
-			}
-			
-			
-		}
-		if (msg_stat==1)
-		{
-			if(mb.msg_type==3)
-			{	
-				msg_stat=0;	
-				if(status!=NULL)	
-					free(status);
-				copestring(&status,mb.msg);
-				device_state_income(device_uid,status);	
-				free(status);
-				free(device_uid);
-				device_uid=NULL;
-				status=NULL;
-
-			}
-			continue;
-		}
-		if (msg_stat==4)
-		{
-			if(mb.msg_type==4)
-			{	
-				if(devstate==NULL)
-					devstate=(char **)malloc(sizeof(char *)*MAX_DEV_LEN );
-				msg_stat=5;
-				copestring(&devstate[devnum],mb.msg);
-				devnum++;
-				
-			}
-			else if(mb.msg_type==5)
-			{
-				add_rules(devnum,devstate);
-				int local_count=0;
-				for(;local_count<devnum;local_count++)
-				{
-					
-					free(devstate[local_count]);
-				}
-				free(devstate);
-				devnum=0;
-				devstate=NULL;
-				msg_stat=0;
+		
+		switch(mb.msg_type)
+		{	
+			//device come
+			case 3:
+				copestring(&content,mb.msg);
+				device_state_income(content);
+				free(content);
+				content=NULL;
 				break;
-
-			}
-			continue;
-		}
-		if (msg_stat==5)
-		{
-			if(mb.msg_type==4)
-			{
-				msg_stat=4;
-				copestring(&devstate[devnum],mb.msg);
-				devnum++;
-			}
-			continue;
+			//add rule
+			case 4:
+				copestring(&content,mb.msg);
+				add_rules(content);
+				free(content);
+				content=NULL;
+				break;
+			//add events
+			case 5:
+				copestring(&content,mb.msg);
+				add_rules(content);
+				free(content);
+				content=NULL;
+				break;
+			//add action
+			case 6:
+				copestring(&content,mb.msg);
+				add_rules(content);
+				free(content);
+				content=NULL;
+				break;
+			//del rule
+			case 7:
+				break;
+			//del event
+			case 8:
+				break;
+			//del action
+			case 9:
+				break;
 		}
 		
+
+			
         }
-        
-	//printf("total time is :%lf\n", (double)(t_end-t_start)/CLOCKS_PER_SEC);
         
         if(msgctl(msg_id, IPC_RMID, 0) == -1)  
     	{  
@@ -495,5 +621,6 @@ int main(int argc,char *argv[])
         return 0;  
 }
 
+*/
 
 

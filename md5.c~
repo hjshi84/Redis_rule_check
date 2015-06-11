@@ -118,6 +118,28 @@ unsigned *md5( const char *msg, int mlen)
     return h;
 }   
 
+char *get_hash_value(char *str)
+{
+        int j=0;
+	int k=0;
+
+	unsigned *d = md5(str, strlen(str));
+	
+	char* result=(char*)malloc(sizeof(char*)*33);
+	WBunion u;
+
+
+	for (j=0;j<4; j++){
+		u.w = d[j];
+		for (k=0;k<4;k++) 
+			sprintf(result+(4*j+k)*2,"%02x",u.b[k]);
+			
+	}
+	result[32]=0x00;
+	return result;
+}
+
+/*
 char* get_hash_value(int argc, char* argv[])
 {
 	char *total_event=NULL;
@@ -160,7 +182,7 @@ char* get_hash_value(int argc, char* argv[])
 	result[32]=0x00;
 	return result;
 } 
- 
+ */
 /*int main( int argc, char *argv[] )
 {
     int j,k;
