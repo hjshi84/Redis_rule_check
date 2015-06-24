@@ -10,7 +10,9 @@ typedef struct {
 }msg_buf;  
 
 static redisContext* context=NULL;
+static char json_value[100];
 char* results=NULL;
+
 
 int combine_user(const char *combine_info);
 int add_user(const char* user_info);

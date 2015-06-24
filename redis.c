@@ -30,7 +30,8 @@ char *get_json_value(cJSON* arg)
 			return "";
 			break;
 		case cJSON_Number:
-			return "can not be integer";
+			sprintf(json_value,"%1.4f",arg->valuedouble);
+			return json_value;
 			break;
 		case cJSON_String:
 			return arg->valuestring;
@@ -92,12 +93,18 @@ void add_event(char *event_info)
 	{
 		printf("Miss arguments!\n");
 		goto end1;
-	}	
+	}
+
+	char *uid_value=get_json_value(uid);
+	char *state_value=get_json_value(state);
+	char *userid_value=	get_json_value(userid);
+	char *app_value=get_json_value(app);
+	char *name_value=get_json_value(name);
 	
-	char *total=(char *)calloc(strlen(uid->valuestring)+strlen(state->valuestring)+2,sizeof(char));
-	strcat(total,uid->valuestring);
+	char *total=(char *)calloc(strlen(uid_value)+strlen(state_value)+2,sizeof(char));
+	strcat(total,uid_value);
 	strcat(total,"~");
-	strcat(total,state->valuestring);
+	strcat(total,state_value);
 	
 	//get rule,user,application identification code
 	char *event_hash=NULL;
@@ -107,17 +114,17 @@ void add_event(char *event_info)
 	free(total);
 	
 	char *user_hash=NULL;
-	total=(char *)calloc(strlen(userid->valuestring)+strlen(app->valuestring)+2,sizeof(char));
-	strcat(total,userid->valuestring);
+	total=(char *)calloc(strlen(userid_value)+strlen(app_value)+2,sizeof(char));
+	strcat(total,userid_value);
 	strcat(total,"~");
-	strcat(total,app->valuestring);
+	strcat(total,app_value);
 	user_hash=get_hash_value(total);
 	printf("user hash is %s\n",user_hash);
 	free(total);
 	
 	char *app_hash=NULL;
 
-	app_hash=get_hash_value(app->valuestring);
+	app_hash=get_hash_value(app_value);
 
 	int required_role=-1;
 	int event_pre_role=-1;
@@ -160,7 +167,7 @@ void add_event(char *event_info)
 	{
 		//if not exists then add a new one
 		redisAppendCommand(context, "hset event:list %s %s",event_hash,app_hash);
-		redisAppendCommand(context, "hset device:%s:stateslist %s %s",uid->valuestring,state->valuestring,event_hash);
+		redisAppendCommand(context, "hset device:%s:stateslist %s %s",uid_value,state_value,event_hash);
 		redisAppendCommand(context, "HINCRBY event:%s:value referCount 1",event_hash);
 		redisAppendCommand(context, "hset event:%s:value role %d",event_hash,required_role);
 		k+=4;
@@ -204,26 +211,33 @@ void add_event(char *event_info)
 	for(;i<event_num;i++)
 	{
 		attr=cJSON_GetArrayItem(event,i);
+		char *attr_value=get_json_value(attr);
 		k++;
 		if (!strcmp(attr->string,"uid")||!strcmp(attr->string,"state"))
 		{
-			redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr->valuestring);
+			redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr_value);
 		}
 		else if(!strcmp(attr->string,"role"))
 		{
 
-			if (atoi(attr->valuestring)>required_role)
+			if (atoi(attr_value)>required_role)
+			{
 				redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,required_role);
+			}
 			else
-				redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr->valuestring);
+			{
+				redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr_value);
+			}
+			redisAppendCommand(context, "hset event:%s:value userid %s",event_hash,userid_value);
+			k++;
 		}
 		else
 		{
-			redisAppendCommand(context, "hset user:%s:event:%s %s %s",user_hash,event_hash,attr->string,attr->valuestring);
+			redisAppendCommand(context, "hset user:%s:event:%s %s %s",user_hash,event_hash,attr->string,attr_value);
 		}	
 	}
 
-	redisAppendCommand(context, "hset user:%s:events %s %s",user_hash,event_hash,name->valuestring);
+	redisAppendCommand(context, "hset user:%s:events %s %s",user_hash,event_hash,name_value);
 	redisAppendCommand(context, "sadd app:%s:events %s",app_hash,event_hash);
 	k+=2;
 	for(i=0;i<k;i++)
@@ -259,11 +273,17 @@ void add_action(char *action_info)
 		printf("Miss arguments!\n");
 		goto end1;
 	}	
+
+	char *url_value=get_json_value(url);
+	char *body_value=get_json_value(body);
+	char *userid_value=	get_json_value(userid);
+	char *app_value=get_json_value(app);
+	char *name_value=get_json_value(name);
 	
-	char *total=(char *)calloc(strlen(url->valuestring)+strlen(body->valuestring)+2,sizeof(char));
-	strcat(total,url->valuestring);
+	char *total=(char *)calloc(strlen(url_value)+strlen(body_value)+2,sizeof(char));
+	strcat(total,url_value);
 	strcat(total,"~");
-	strcat(total,body->valuestring);
+	strcat(total,body_value);
 	
 	//get action identification code
 	char *action_hash=NULL;
@@ -272,15 +292,15 @@ void add_action(char *action_info)
 	free(total);
 	
 	char *user_hash=NULL;
-	total=(char *)calloc(strlen(userid->valuestring)+strlen(app->valuestring)+2,sizeof(char));
-	strcat(total,userid->valuestring);
+	total=(char *)calloc(strlen(userid_value)+strlen(app_value)+2,sizeof(char));
+	strcat(total,userid_value);
 	strcat(total,"~");
-	strcat(total,app->valuestring);
+	strcat(total,app_value);
 	user_hash=get_hash_value(total);
 	free(total);
 	
 	char *app_hash=NULL;
-	app_hash=get_hash_value(app->valuestring);
+	app_hash=get_hash_value(app_value);
 
 
 	int required_role=-1;
@@ -366,25 +386,28 @@ void add_action(char *action_info)
 	for(;i<action_num;i++)
 	{
 		attr=cJSON_GetArrayItem(action,i);
+		char *attr_value=get_json_value(attr);
 		k++;
 		if (!strcmp(attr->string,"url")||!strcmp(attr->string,"body")||!strcmp(attr->string,"userid"))
 		{
-			redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,attr->valuestring);	
+			redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,attr_value);	
 		}
 		else if(!strcmp(attr->string,"role"))
 		{
-			if (atoi(attr->valuestring)>required_role)
+			if (atoi(attr_value)>required_role)
 				redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,required_role);
 			else
-				redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,attr->valuestring);
+				redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,attr_value);
+			redisAppendCommand(context, "hset event:%s:value userid %s",action_hash,userid_value);
+			k++;
 		}
 		else
 		{
-			redisAppendCommand(context, "hset user:%s:action:%s %s %s",user_hash,action_hash,attr->string,attr->valuestring);
+			redisAppendCommand(context, "hset user:%s:action:%s %s %s",user_hash,action_hash,attr->string,attr_value);
 		}	
 	}
 
-	redisAppendCommand(context, "hset user:%s:actions %s %s",user_hash,action_hash,name->valuestring);
+	redisAppendCommand(context, "hset user:%s:actions %s %s",user_hash,action_hash,name_value);
 	redisAppendCommand(context, "sadd app:%s:actions %s",app_hash,action_hash);
 	k+=2;
 	for(i=0;i<k;i++)
@@ -405,8 +428,8 @@ int check_role(char *type_hash,char *user_hash,char *eventoraction)
 {
 	//start a new connect 
 	redisReply *reply;
-	//redisContext* tempcontext = redisConnect("10.200.43.146", 6379);  
-	redisContext* tempcontext = redisConnect("127.0.0.1", 6379);  
+	redisContext* tempcontext = redisConnect("10.200.43.146", 6379);  
+	//redisContext* tempcontext = redisConnect("127.0.0.1", 6379);  
 	
 	if (tempcontext->err)  
 	{  
@@ -552,16 +575,22 @@ void add_rules(const char *rule_info)
 		printf("rule id is:%s\n",rule_hash);
 		free(total);
 	
+
+		char *userid_value=	get_json_value(userid);
+		char *app_value=get_json_value(app);
+		char *name_value=get_json_value(name);
+		char *enable_value=get_json_value(enable);
+
 		char *user_hash=NULL;//need to be a user in istack? check in combine
-		total=(char *)calloc(strlen(userid->valuestring)+strlen(app->valuestring)+2,sizeof(char));
-		strcat(total,userid->valuestring);
+		total=(char *)calloc(strlen(userid_value)+strlen(app_value)+2,sizeof(char));
+		strcat(total,userid_value);
 		strcat(total,"~");
-		strcat(total,app->valuestring);
+		strcat(total,app_value);
 		user_hash=get_hash_value(total);
 		free(total);
 	
 		char *app_hash=NULL;
-		app_hash=get_hash_value(app->valuestring);
+		app_hash=get_hash_value(app_value);
 
 		
 		redisReply *reply;
@@ -584,7 +613,8 @@ void add_rules(const char *rule_info)
 			//if not exists then add a new one
 			redisAppendCommand(context, "sadd rule:list %s",rule_hash);
 			redisAppendCommand(context, "HINCRBY rule:%s:value referCount 1",rule_hash);
-			k+=2;
+			redisAppendCommand(context, "hset rule:%s:value userid %s",rule_hash,userid_value);
+			k+=3;
 		}
 		else
 		{
@@ -612,7 +642,8 @@ void add_rules(const char *rule_info)
 		{
 			cJSON *info_body=cJSON_GetArrayItem(rule_content,j);
 			char *name=info_body->string;
-			char *value=info_body->valuestring;
+			char *value=get_json_value(info_body);
+
 			if(!strcmp(name,"events")||!strcmp(name,"actions")||!strcmp(name,"enable")||!strcmp(name,"userid"))
 			{
 				continue;
@@ -625,7 +656,7 @@ void add_rules(const char *rule_info)
 			}
 		}
 		
-		redisAppendCommand(context, "hset user:%s:rules %s %s",user_hash,rule_hash,name->valuestring);
+		redisAppendCommand(context, "hset user:%s:rules %s %s",user_hash,rule_hash,name_value);
 		k++;
 
 		//add events and actions to redis
@@ -636,7 +667,7 @@ void add_rules(const char *rule_info)
 			cJSON *each_event=cJSON_GetArrayItem(events,j);
 			cJSON *event_hash_pkg=cJSON_GetObjectItem(each_event,"id");
 			//Judge if event exists and meet the required rule
-			char *event_hash=event_hash_pkg->valuestring;
+			char *event_hash=get_json_value(event_hash_pkg);
 			if (!check_role(event_hash,user_hash,"event"))
 			{
 				redisAppendCommand(context, "sadd event:%s:rules %s",event_hash,rule_hash);
@@ -658,7 +689,7 @@ void add_rules(const char *rule_info)
 		{
 			cJSON *each_action=cJSON_GetArrayItem(actions,j);
 			cJSON *action_hash_pkg=cJSON_GetObjectItem(each_action,"id");
-			char *action_hash=action_hash_pkg->valuestring;
+			char *action_hash=get_json_value(action_hash_pkg);
 			if (!check_role(action_hash,user_hash,"action"))
 			{
 				redisAppendCommand(context, "sadd action:%s:rules %s",action_hash,rule_hash);
@@ -676,7 +707,7 @@ void add_rules(const char *rule_info)
 		
 		//add enable
 		
-		redisAppendCommand(context, "hset rule:%s:value %s %s",rule_hash,enable->string,enable->valuestring);
+		redisAppendCommand(context, "hset rule:%s:value %s %s",rule_hash,enable->string,enable_value);
 		k++;
 		
 		for(j=0;j<k;j++)
@@ -735,18 +766,21 @@ int combine_user(const char *combine_info)
 		cJSON *combine_content=cJSON_GetArrayItem(combine,i);
 		cJSON *id=cJSON_GetObjectItem(combine_content,"userid");
 		cJSON *app=cJSON_GetObjectItem(combine_content,"app");
+
+		char *userid_value=	get_json_value(id);
+		char *app_value=get_json_value(app);
 		
 		//get app_hash and user hash
-		char *total=(char *)calloc(strlen(id->valuestring)+strlen(app->valuestring)+2,sizeof(char));
-		strcat(total,id->valuestring);
+		char *total=(char *)calloc(strlen(userid_value)+strlen(app_value)+2,sizeof(char));
+		strcat(total,userid_value);
 		strcat(total,"~");
-		strcat(total,app->valuestring);
+		strcat(total,app_value);
 		
 		char *user_hash=NULL;
 		user_hash=get_hash_value(total);
 		free(total);
 		char *app_hash=NULL;
-		app_hash=get_hash_value(app->valuestring);
+		app_hash=get_hash_value(app_value);
 		
 		//check if user_hash is shared
 		reply=(redisReply*)redisCommand(context, "hget app:%s:users %s",app_hash,user_hash); 
@@ -807,6 +841,10 @@ int add_user(const char* user_info)
 		cJSON *id=cJSON_GetObjectItem(user_content,"userid");
 		cJSON *app=cJSON_GetObjectItem(user_content,"app");
 		cJSON *role=cJSON_GetObjectItem(user_content,"role");
+
+		char *userid_value=	get_json_value(id);
+		char *app_value=get_json_value(app);
+		char *role_value=get_json_value(role);
 		
 		if(id==NULL||app==NULL||role==NULL)
 		{
@@ -814,17 +852,17 @@ int add_user(const char* user_info)
 			continue;
 		}
 		
-		char *total=(char *)calloc(strlen(id->valuestring)+strlen(app->valuestring)+2,sizeof(char));
-		strcat(total,id->valuestring);
+		char *total=(char *)calloc(strlen(userid_value)+strlen(app_value)+2,sizeof(char));
+		strcat(total,userid_value);
 		strcat(total,"~");
-		strcat(total,app->valuestring);
+		strcat(total,app_value);
 		
 		char *user_hash=NULL;
         printf("user id :%s\n",total);
 		user_hash=get_hash_value(total);
 		free(total);
 		char *app_hash=NULL;
-		app_hash=get_hash_value(app->valuestring);
+		app_hash=get_hash_value(app_value);
 		printf("user_hash:%s\n",user_hash);
 		//check if app_hash exists then user_hash exists
 		redisAppendCommand(context, "sismember app:list %s",app_hash);
@@ -870,7 +908,7 @@ int add_user(const char* user_info)
 		{
 			cJSON *info_body=cJSON_GetArrayItem(user_content,j);
 			char *name=info_body->string;
-			char *value=info_body->valuestring;
+			char *value=get_json_value(info_body);
 			k++;
 
 			if(!strcmp(name,"shared"))
@@ -934,6 +972,8 @@ int add_application(const char* app_info)
 		cJSON *app_content=cJSON_GetArrayItem(app,i);
 		//need to get unicode id
 		cJSON *uaid=cJSON_GetObjectItem(app_content,"app");
+
+		char *app_value=get_json_value(uaid);
 		if(uaid==NULL)
 		{
 			printf("Miss arguments!\n");
@@ -941,8 +981,8 @@ int add_application(const char* app_info)
 		}
 
 		char *app_hash=NULL;
-		app_hash=get_hash_value(uaid->valuestring);
-		printf("application value is %s\n",uaid->valuestring);
+		app_hash=get_hash_value(app_value);
+		printf("application value is %s\n",app_value);
 		printf("application hash is %s\n",app_hash);
 		/*
 		cJSON *roles=cJSON_GetObjectItem(app_content,"roles");
@@ -972,7 +1012,7 @@ int add_application(const char* app_info)
 		{
 			cJSON *info_body=cJSON_GetArrayItem(app_content,j);
 			char *name=info_body->string;
-			char *value=info_body->valuestring;
+			char *value=get_json_value(info_body);
 			
 			if(!strcmp(name,"roles"))
 			{
@@ -1069,8 +1109,8 @@ void device_state_income(const char* device_info)//const char* uid,const char* s
 		cJSON *temp_dev=cJSON_GetArrayItem(json,temp_loc);
 		cJSON *temp_uid=cJSON_GetObjectItem(temp_dev,"uid");
 		cJSON *temp_state=cJSON_GetObjectItem(temp_dev,"state");
-		char *uid=temp_uid->valuestring;
-		char *state=temp_state->valuestring;
+		char *uid=get_json_value(temp_uid);
+		char *state=get_json_value(temp_state);
 		printf("uid is %s, state is %s\n\n\n\n",uid,state);
 		const char* command1;
 		char* event_id=NULL;
@@ -1119,7 +1159,7 @@ void device_state_income(const char* device_info)//const char* uid,const char* s
 			{
 				cJSON *temp_json=cJSON_GetArrayItem(temp_dev,tempv);
 				char *json_name=temp_json->string;
-				char *json_value=temp_json->valuestring;
+				char *json_value=get_json_value(temp_json);
 				redisAppendCommand(context, "hset device:%s %s %s",uid,json_name,json_value);
 			}
 			tempv=0;
@@ -2380,8 +2420,8 @@ int createConnect()
 	redisReply *reply;
 	if (context==NULL)
 	{
-		context = redisConnect("127.0.0.1", 6379);  
-		//context = redisConnect("10.200.43.146", 6379);  
+		//context = redisConnect("127.0.0.1", 6379);  
+		context = redisConnect("10.200.43.146", 6379);  
 		if (context->err)  
 		{  
 			goto error1;
@@ -2439,9 +2479,9 @@ int main(int argc,char *argv[])
     add_user("[{\"app\":\"istack\",\"userid\":\"admin\",\"role\":\"2\"}]");
     get_events_bind("istack", "admin");
     get_events_bind("istack","demo");
-    add_event("{\"name\":\"event1\",\"app\":\"istack\",\"userid\":\"demo\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\",\"haha\":1}");
-	add_event("{\"name\":\"event2\",\"app\":\"istack\",\"userid\":\"admin\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
-	delete_event_by_user("a2fbd8b4c83979280c571b5f7c4e8683","istack", "admin");
+    //add_event("{\"name\":\"event1\",\"app\":\"istack\",\"userid\":\"demo\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\",\"haha\":1}");
+	//add_event("{\"name\":\"event2\",\"app\":\"istack\",\"userid\":\"admin\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
+	//delete_event_by_user("a2fbd8b4c83979280c571b5f7c4e8683","istack", "admin");
     //add_action("{\"url\":\"http://1.1.1.1/\",\"body\":{\"a\":1},\"app\":\"istack\",\"userid\":\"admin\",\"name\":\"aaa\"}");
 
     /*add_user("[{\"app\":\"hjshi\",\"userid\":\"tempid\",\"role\":\"1\"}]");
