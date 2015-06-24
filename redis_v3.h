@@ -11,19 +11,9 @@ typedef struct {
 
 static redisContext* context=NULL;
 
-void device_state_income(const char* content);
+void device_state_income(const char* uid,const char* state);
 void rule_detect(const char* event_id);
-void add_rules(char *rule_info);
+void add_rules(int argc,char *argv[]);
 int createConnect();
 int closeConnect();
 #endif
-
-/*as reference
-define REDIS_REPLY_STRING 1
-define REDIS_REPLY_ARRAY 2
-define REDIS_REPLY_INTEGER 3
-define REDIS_REPLY_NIL 4
-define REDIS_REPLY_STATUS 5
-define REDIS_REPLY_ERROR 6
-
-*/
