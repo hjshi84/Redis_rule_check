@@ -16,6 +16,30 @@
 //"127.0.0.1"
 //"10.200.46.245"
 
+char *get_json_value(cJSON* arg)
+{
+	switch (arg->type)
+	{
+		case cJSON_False:
+			return "0";
+			break;
+		case cJSON_True:
+			return "1";
+			break;
+		case cJSON_NULL:
+			return "";
+			break;
+		case cJSON_Number:
+			return "can not be integer";
+			break;
+		case cJSON_String:
+			return arg->valuestring;
+			break;
+		default:
+			return "UNKNOW TYPES";
+			break;
+	}
+}
 
 void doTestSub()
 {
@@ -96,7 +120,7 @@ void add_event(char *event_info)
 	app_hash=get_hash_value(app->valuestring);
 
 	int required_role=-1;
-	
+	int event_pre_role=-1;
 	//check if event exists
 	int event_num=cJSON_GetArraySize(event);
 	cJSON *attr;
@@ -147,7 +171,7 @@ void add_event(char *event_info)
 		freeReplyObject(reply);
 		redisAppendCommand(context, "hget event:%s:value role",event_hash);
 		redisGetReply(context,(void **)&reply);
-		if (reply->type!=1||atoi(reply->str)>required_role)
+		if (reply->type!=1||(event_pre_role=atoi(reply->str))>required_role)
 		{
 			printf("Permission denied!\n");
 			freeReplyObject(reply);
@@ -159,9 +183,10 @@ void add_event(char *event_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:event:%s",user_hash,event_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==3&&reply->integer==0)
+			if(reply->type==2&&reply->integer==0)
 			{
 				redisAppendCommand(context, "HINCRBY event:%s:value referCount 1",event_hash);
+
 				k++;
 			}
 		}
@@ -180,12 +205,13 @@ void add_event(char *event_info)
 	{
 		attr=cJSON_GetArrayItem(event,i);
 		k++;
-		if (!strcmp(attr->string,"uid")||!strcmp(attr->string,"state")||!strcmp(attr->string,"userid"))
+		if (!strcmp(attr->string,"uid")||!strcmp(attr->string,"state"))
 		{
 			redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr->valuestring);
 		}
 		else if(!strcmp(attr->string,"role"))
 		{
+
 			if (atoi(attr->valuestring)>required_role)
 				redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,required_role);
 			else
@@ -321,7 +347,7 @@ void add_action(char *action_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:action:%s",user_hash,action_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==3&&reply->integer==0)
+			if(reply->type==2&&reply->integer==0)
 			{
 				redisAppendCommand(context, "HINCRBY action:%s:value referCount 1",action_hash);
 				k++;
@@ -379,8 +405,8 @@ int check_role(char *type_hash,char *user_hash,char *eventoraction)
 {
 	//start a new connect 
 	redisReply *reply;
-	redisContext* tempcontext = redisConnect("10.200.43.146", 6379);  
-	//redisContext* tempcontext = redisConnect("127.0.0.1", 6379);  
+	//redisContext* tempcontext = redisConnect("10.200.43.146", 6379);  
+	redisContext* tempcontext = redisConnect("127.0.0.1", 6379);  
 	
 	if (tempcontext->err)  
 	{  
@@ -565,7 +591,7 @@ void add_rules(const char *rule_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:rule:%s",user_hash,rule_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==3&&reply->integer==0)
+			if(reply->type==2&&reply->integer==0)
 			{
 				redisAppendCommand(context, "HINCRBY rule:%s:value referCount 1",rule_hash);
 				k++;
@@ -1649,6 +1675,170 @@ int delete_rule(char *rule_hash)
 end: closeConnect();
 	return -1;
 }
+
+int delete_event_by_userhash(char *event_hash,char *user_hash)
+{
+	createConnect();
+
+	//ger role;
+	redisReply *reply;
+	int required_role;
+	int user_role;
+	redisAppendCommand(context,"hget user:%s:value role",user_hash);
+	redisAppendCommand(context,"hget event:%s:value role",event_hash);
+	redisGetReply(context,(void **)&reply);
+	if (reply->type==1)
+		user_role=atoi(reply->str);
+	else
+	{
+		printf("Database wrong!\n");
+		freeReplyObject(reply);
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+		goto end;
+	}
+	freeReplyObject(reply);
+	redisGetReply(context,(void **)&reply);
+	if (reply->type==1)
+		required_role=atoi(reply->str);
+	else
+	{
+		printf("Database wrong!\n");
+		freeReplyObject(reply);
+		goto end;
+	}
+	freeReplyObject(reply);
+
+	if(required_role>user_role)
+	{
+		printf("Permission denied!\n");
+	}
+	else
+	{
+		redisAppendCommand(context,"del user:%s:event:%s",user_hash,event_hash);
+		redisAppendCommand(context,"HINCRBY event:%s:value referCount -1",event_hash);
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+		redisGetReply(context,(void **)&reply);
+		if(reply->type==3&&reply->integer<1)
+		{
+			delete_event(event_hash);
+		}
+		freeReplyObject(reply);
+	}
+
+	free(user_hash);
+	closeConnect();
+	return 0;
+end:
+	free(user_hash);
+	closeConnect();
+	return -1;
+}
+
+int delete_action_by_userhash(char *action_hash,char *user_hash)
+{
+	createConnect();
+
+	//ger role;
+	redisReply *reply;
+	int required_role;
+	int user_role;
+	redisAppendCommand(context,"hget user:%s:value role",user_hash);
+	redisAppendCommand(context,"hget action:%s:value role",action_hash);
+	redisGetReply(context,(void **)&reply);
+	if (reply->type==1)
+		user_role=atoi(reply->str);
+	else
+	{
+		printf("Database wrong!\n");
+		freeReplyObject(reply);
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+		goto end;
+	}
+	freeReplyObject(reply);
+	redisGetReply(context,(void **)&reply);
+	if (reply->type==1)
+		required_role=atoi(reply->str);
+	else
+	{
+		printf("Database wrong!\n");
+		freeReplyObject(reply);
+		goto end;
+	}
+	freeReplyObject(reply);
+
+	if(required_role>user_role)
+	{
+		printf("Permission denied!\n");
+	}
+	else
+	{
+		redisAppendCommand(context,"del user:%s:action:%s",user_hash,action_hash);
+		redisAppendCommand(context,"HINCRBY action:%s:value referCount -1",action_hash);
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+		redisGetReply(context,(void **)&reply);
+		if(reply->type==3&&reply->integer<1)
+		{
+			delete_action(action_hash);
+		}
+		freeReplyObject(reply);
+	}
+
+	free(user_hash);
+	closeConnect();
+	return 0;
+end:
+	free(user_hash);
+	closeConnect();
+	return -1;
+}
+int delete_rule_by_userhash(char *rule_hash,char *user_hash)
+{
+	createConnect();
+
+	//ger role;
+	redisReply *reply;
+	redisAppendCommand(context,"hget user:%s:rules %s",user_hash,rule_hash);
+	redisGetReply(context,(void **)&reply);
+	if (reply->type==1)
+	{
+		freeReplyObject(reply);
+		redisAppendCommand(context,"hdel user:%s:rules %s",user_hash,rule_hash);
+		redisAppendCommand(context,"HINCRBY rule:%s:value referCount -1",rule_hash);
+		redisGetReply(context,(void **)&reply);
+		freeReplyObject(reply);
+		redisGetReply(context,(void **)&reply);
+		if(reply->type==3&&reply->integer<1)
+		{
+			delete_rule(rule_hash);
+		}
+		freeReplyObject(reply);
+	}
+	else if(reply->type==4)
+	{
+		printf("rule do not belongs to you! Cannot delete it !!\n");
+		freeReplyObject(reply);
+		goto end;
+	}
+	else
+	{
+		printf("Database wrong!\n");
+		freeReplyObject(reply);
+		goto end;
+	}
+	
+	free(user_hash);
+	closeConnect();
+	return 0;
+end:
+	free(user_hash);
+	closeConnect();
+	return -1;
+}
+
 int delete_event_by_user(char *event_hash,char *app, char *userid)
 {
 	//check role then we can use the normal function 
@@ -1888,7 +2078,7 @@ char* get_events_bind(char *app, char* userid)
 	char *app_hash=NULL;
 	app_hash=get_hash_value(app);
 
-	//ger role;
+	//check role if it could get such rule
 	redisReply* reply;
 	redisReply* r;
 	reply=(redisReply*)redisCommand(context,"hget user:%s:value combine",user_hash);
@@ -1903,7 +2093,24 @@ char* get_events_bind(char *app, char* userid)
 			for(;i<count;i++)
 			{
 				char *user_temp=r->element[i]->str;
+				int user_role=-1;
 				redisReply* temp_reply;
+				//get user role
+				temp_reply=(redisReply*)redisCommand(context,"hget user:%s:value role",user_temp);
+				if(temp_reply->type==1)
+				{
+					user_role=atoi(temp_reply->str);
+				}
+				else
+				{
+					printf("Database wrong\n");
+					freeReplyObject(temp_reply);
+					freeReplyObject(r);
+					freeReplyObject(reply);
+					goto end;
+				}
+				freeReplyObject(temp_reply);
+
 				temp_reply=(redisReply*)redisCommand(context,"hkeys user:%s:events",user_temp);
 				if(temp_reply->type==2)
 				{
@@ -1914,11 +2121,33 @@ char* get_events_bind(char *app, char* userid)
 					{
 						redisReply* temp;
 						char *temp_event_hash=temp_reply->element[j]->str;
-						temp=(redisReply*)redisCommand(context,"keys user:%s:event:%s",user_hash,temp_event_hash);
+
+						//if role is not permitted we should delete it 
+						temp=(redisReply*)redisCommand(context,"hget event:%s:value role",temp_event_hash);
+						if(temp->type==1)
+						{
+							int required_role=atoi(temp->str);
+							if (required_role>user_role)
+							{
+								delete_event_by_userhash(temp_event_hash,user_temp);
+							}
+						}
+						else if(temp->type!=4)
+						{
+							printf("Database wrong!\n");
+							freeReplyObject(temp);
+							freeReplyObject(temp_reply);
+							freeReplyObject(r);
+							freeReplyObject(reply);
+						}
+						freeReplyObject(temp);
+						//if role permit
+						temp=(redisReply*)redisCommand(context,"keys user:%s:event:%s",user_temp,temp_event_hash);
+						
 						if(temp->type==2&&temp->elements==0)
 						{
 							freeReplyObject(temp);
-							temp=(redisReply*)redisCommand(context,"hdel user:%s:events %s",user_hash,temp_event_hash);
+							temp=(redisReply*)redisCommand(context,"hdel user:%s:events %s",user_temp,temp_event_hash);
 							freeReplyObject(temp);
 						}
 						else if(temp->type==2&&temp->elements>0)
@@ -1941,13 +2170,18 @@ char* get_events_bind(char *app, char* userid)
 						}
 						else
 						{
+							printf("Database wrong!\n");
 							freeReplyObject(temp);
+							freeReplyObject(temp_reply);
+							freeReplyObject(r);
+							freeReplyObject(reply);
 							goto end;
 						}
 					}
 				}
 				else
 				{
+					printf("Database wrong\n");
 					freeReplyObject(temp_reply);
 					freeReplyObject(r);
 					freeReplyObject(reply);
@@ -2018,7 +2252,25 @@ char* get_actions_bind(char *app, char* userid)
 			for(;i<count;i++)
 			{
 				char *user_temp=r->element[i]->str;
+
+				int user_role=-1;
 				redisReply* temp_reply;
+				//get user role
+				temp_reply=(redisReply*)redisCommand(context,"hget user:%s:value role",user_temp);
+				if(temp_reply->type==1)
+				{
+					user_role=atoi(temp_reply->str);
+				}
+				else
+				{
+					printf("Database wrong\n");
+					freeReplyObject(temp_reply);
+					freeReplyObject(r);
+					freeReplyObject(reply);
+					goto end;
+				}
+				freeReplyObject(temp_reply);
+
 				temp_reply=(redisReply*)redisCommand(context,"hkeys user:%s:actions",user_temp);
 				if(temp_reply->type==2)
 				{
@@ -2029,6 +2281,26 @@ char* get_actions_bind(char *app, char* userid)
 					{
 						redisReply* temp;
 						char *temp_action_hash=temp_reply->element[j]->str;
+						//if role is not permitted we should delete it 
+						temp=(redisReply*)redisCommand(context,"hget action:%s:value role",temp_action_hash);
+						if(temp->type==1)
+						{
+							int required_role=atoi(temp->str);
+							if (required_role>user_role)
+							{
+								delete_action_by_userhash(temp_action_hash,user_temp);
+							}
+						}
+						else if(temp->type!=4)
+						{
+							printf("Database wrong!\n");
+							freeReplyObject(temp);
+							freeReplyObject(temp_reply);
+							freeReplyObject(r);
+							freeReplyObject(reply);
+						}
+						freeReplyObject(temp);
+
 						temp=(redisReply*)redisCommand(context,"keys user:%s:action:%s",user_hash,temp_action_hash);
 						if(temp->type==2&&temp->elements==0)
 						{
@@ -2108,8 +2380,8 @@ int createConnect()
 	redisReply *reply;
 	if (context==NULL)
 	{
-		//context = redisConnect("127.0.0.1", 6379);  
-		context = redisConnect("10.200.43.146", 6379);  
+		context = redisConnect("127.0.0.1", 6379);  
+		//context = redisConnect("10.200.43.146", 6379);  
 		if (context->err)  
 		{  
 			goto error1;
@@ -2162,10 +2434,14 @@ int main(int argc,char *argv[])
 
     double t_start,t_end;
     	//t_start=clock();
-    //add_application("[{\"app\":\"istack\"}]");
+    add_application("[{\"app\":\"istack\"}]");
     add_user("[{\"app\":\"istack\",\"userid\":\"demo\",\"role\":\"1\"}]");
+    add_user("[{\"app\":\"istack\",\"userid\":\"admin\",\"role\":\"2\"}]");
     get_events_bind("istack", "admin");
     get_events_bind("istack","demo");
+    add_event("{\"name\":\"event1\",\"app\":\"istack\",\"userid\":\"demo\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\",\"haha\":1}");
+	add_event("{\"name\":\"event2\",\"app\":\"istack\",\"userid\":\"admin\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
+	delete_event_by_user("a2fbd8b4c83979280c571b5f7c4e8683","istack", "admin");
     //add_action("{\"url\":\"http://1.1.1.1/\",\"body\":{\"a\":1},\"app\":\"istack\",\"userid\":\"admin\",\"name\":\"aaa\"}");
 
     /*add_user("[{\"app\":\"hjshi\",\"userid\":\"tempid\",\"role\":\"1\"}]");
