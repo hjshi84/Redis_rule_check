@@ -390,7 +390,7 @@ int check_role(char *type_hash,char *user_hash,char *eventoraction)
 		return -1;
 	}
 	redisAppendCommand(tempcontext, "AUTH redis");
-	redisAppendCommand(tempcontext, "SELECT 2");
+	redisAppendCommand(tempcontext, "SELECT 1");
 	redisGetReply(tempcontext,(void **)&reply);
 	freeReplyObject(reply);
 	redisGetReply(tempcontext,(void **)&reply);
@@ -1915,7 +1915,7 @@ char* get_events_bind(char *app, char* userid)
 						redisReply* temp;
 						char *temp_event_hash=temp_reply->element[j]->str;
 						temp=(redisReply*)redisCommand(context,"keys user:%s:event:%s",user_hash,temp_event_hash);
-						if(temp->type==4)
+						if(temp->type==2&&temp->elements==0)
 						{
 							freeReplyObject(temp);
 							temp=(redisReply*)redisCommand(context,"hdel user:%s:events %s",user_hash,temp_event_hash);
@@ -2030,7 +2030,7 @@ char* get_actions_bind(char *app, char* userid)
 						redisReply* temp;
 						char *temp_action_hash=temp_reply->element[j]->str;
 						temp=(redisReply*)redisCommand(context,"keys user:%s:action:%s",user_hash,temp_action_hash);
-						if(temp->type==4)
+						if(temp->type==2&&temp->elements==0)
 						{
 							freeReplyObject(temp);
 							temp=(redisReply*)redisCommand(context,"hdel user:%s:actions %s",user_hash,temp_action_hash);
@@ -2115,7 +2115,7 @@ int createConnect()
 			goto error1;
 		}
 		redisAppendCommand(context, "AUTH redis");
-		redisAppendCommand(context, "SELECT 2");
+		redisAppendCommand(context, "SELECT 1");
 		redisGetReply(context,(void **)&reply);
 		freeReplyObject(reply);
 		redisGetReply(context,(void **)&reply);
@@ -2162,9 +2162,12 @@ int main(int argc,char *argv[])
 
     double t_start,t_end;
     	//t_start=clock();
-    add_application("[{\"app\":\"istack\"}]");
-    add_user("[{\"app\":\"istack\",\"userid\":\"admin\",\"role\":\"2\"}]");
-    add_action("{\"url\":\"http://1.1.1.1/\",\"body\":{\"a\":1},\"app\":\"istack\",\"userid\":\"admin\",\"name\":\"aaa\"}");
+    //add_application("[{\"app\":\"istack\"}]");
+    add_user("[{\"app\":\"istack\",\"userid\":\"demo\",\"role\":\"1\"}]");
+    get_events_bind("istack", "admin");
+    get_events_bind("istack","demo");
+    //add_action("{\"url\":\"http://1.1.1.1/\",\"body\":{\"a\":1},\"app\":\"istack\",\"userid\":\"admin\",\"name\":\"aaa\"}");
+
     /*add_user("[{\"app\":\"hjshi\",\"userid\":\"tempid\",\"role\":\"1\"}]");
 	add_event("{\"name\":\"event1\",\"app\":\"hjshi\",\"userid\":\"tempid\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
 	add_event("{\"name\":\"event2\",\"app\":\"hjshi\",\"userid\":\"adminid\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
