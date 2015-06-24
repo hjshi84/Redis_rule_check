@@ -180,7 +180,7 @@ void add_event(char *event_info)
 	{
 		attr=cJSON_GetArrayItem(event,i);
 		k++;
-		if (!strcmp(attr->string,"uid")||!strcmp(attr->string,"state"))
+		if (!strcmp(attr->string,"uid")||!strcmp(attr->string,"state")||!strcmp(attr->string,"userid"))
 		{
 			redisAppendCommand(context, "hset event:%s:value %s %s",event_hash,attr->string,attr->valuestring);
 		}
@@ -341,7 +341,7 @@ void add_action(char *action_info)
 	{
 		attr=cJSON_GetArrayItem(action,i);
 		k++;
-		if (!strcmp(attr->string,"url")||!strcmp(attr->string,"body"))
+		if (!strcmp(attr->string,"url")||!strcmp(attr->string,"body")||!strcmp(attr->string,"userid"))
 		{
 			redisAppendCommand(context, "hset action:%s:value %s %s",action_hash,attr->string,attr->valuestring);	
 		}
@@ -390,7 +390,7 @@ int check_role(char *type_hash,char *user_hash,char *eventoraction)
 		return -1;
 	}
 	redisAppendCommand(tempcontext, "AUTH redis");
-	redisAppendCommand(tempcontext, "SELECT 1");
+	redisAppendCommand(tempcontext, "SELECT 2");
 	redisGetReply(tempcontext,(void **)&reply);
 	freeReplyObject(reply);
 	redisGetReply(tempcontext,(void **)&reply);
@@ -587,7 +587,7 @@ void add_rules(const char *rule_info)
 			cJSON *info_body=cJSON_GetArrayItem(rule_content,j);
 			char *name=info_body->string;
 			char *value=info_body->valuestring;
-			if(!strcmp(name,"events")||!strcmp(name,"actions")||!strcmp(name,"enable"))
+			if(!strcmp(name,"events")||!strcmp(name,"actions")||!strcmp(name,"enable")||!strcmp(name,"userid"))
 			{
 				continue;
 			}
@@ -794,6 +794,7 @@ int add_user(const char* user_info)
 		strcat(total,app->valuestring);
 		
 		char *user_hash=NULL;
+        printf("user id :%s\n",total);
 		user_hash=get_hash_value(total);
 		free(total);
 		char *app_hash=NULL;
@@ -2114,7 +2115,7 @@ int createConnect()
 			goto error1;
 		}
 		redisAppendCommand(context, "AUTH redis");
-		redisAppendCommand(context, "SELECT 1");
+		redisAppendCommand(context, "SELECT 2");
 		redisGetReply(context,(void **)&reply);
 		freeReplyObject(reply);
 		redisGetReply(context,(void **)&reply);
@@ -2161,9 +2162,10 @@ int main(int argc,char *argv[])
 
     double t_start,t_end;
     	//t_start=clock();
-    add_application("[{\"app\":\"hjshi\"}]");
-    add_user("[{\"app\":\"hjshi\",\"userid\":\"adminid\",\"role\":\"2\"}]");
-    add_user("[{\"app\":\"hjshi\",\"userid\":\"tempid\",\"role\":\"1\"}]");
+    add_application("[{\"app\":\"istack\"}]");
+    add_user("[{\"app\":\"istack\",\"userid\":\"admin\",\"role\":\"2\"}]");
+    add_action("{\"url\":\"http://1.1.1.1/\",\"body\":{\"a\":1},\"app\":\"istack\",\"userid\":\"admin\",\"name\":\"aaa\"}");
+    /*add_user("[{\"app\":\"hjshi\",\"userid\":\"tempid\",\"role\":\"1\"}]");
 	add_event("{\"name\":\"event1\",\"app\":\"hjshi\",\"userid\":\"tempid\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
 	add_event("{\"name\":\"event2\",\"app\":\"hjshi\",\"userid\":\"adminid\",\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
 	add_event("{\"name\":\"event3\",\"app\":\"hjshi\",\"userid\":\"adminid\",\"type\":\"PIR\",\"uid\":\"002\",\"state\":\"1\",\"admin\":\"aaa\"}");
