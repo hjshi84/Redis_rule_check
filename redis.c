@@ -77,8 +77,9 @@ void add_event(char *event_info)
 	if (reply->integer==1)
 	{
 		printf("There is already an event in DB. Please change the config!\n");
-
 		free(event_hash);
+		cJSON_Delete(event);
+		freeReplyObject(reply);
 		return;
 	}
 	freeReplyObject(reply);
@@ -116,8 +117,7 @@ void add_action(char *action_info)
 	//get action hash id 
 	cJSON *url=cJSON_GetObjectItem(action,"url");
 	cJSON *body=cJSON_GetObjectItem(action,"body");
-	
-	char *total=(char *)malloc(sizeof(char *)*(strlen(url->valuestring)+strlen(body->valuestring)+1));
+	char *total=(char *)calloc(strlen(url->valuestring)+strlen(body->valuestring)+1,sizeof(char));
 	strcat(total,url->valuestring);
 	strcat(total,body->valuestring);
 	
@@ -133,8 +133,9 @@ void add_action(char *action_info)
 	if (reply->integer==1)
 	{
 		printf("There is already an action in DB. Please change the config!\n");
-
 		free(action_hash);
+		cJSON_Delete(action);
+		freeReplyObject(reply);
 		return;
 	}
 	freeReplyObject(reply);
@@ -186,7 +187,7 @@ void add_rules(char *rule_info)
 		cJSON *actions=cJSON_GetObjectItem(rule_content,"actions");
 		char *temp_events=cJSON_PrintUnformatted(events);
 		char *temp_actions=cJSON_PrintUnformatted(actions);
-		char *total=(char *)malloc(sizeof(char *)*(strlen(temp_events)+strlen(temp_actions)+1));
+		char *total=(char *)calloc(strlen(temp_events)+strlen(temp_actions)+1,sizeof(char));
 		strcat(total,temp_events);
 		strcat(total,temp_actions);
 		
@@ -202,8 +203,10 @@ void add_rules(char *rule_info)
 		if (reply->integer==1)
 		{
 			printf("There is already an Rule in DB. Please change the config!\n");
-			cJSON_Delete(rule);
+			free(temp_events);
+			free(temp_actions);
 			free(rule_hash);
+			freeReplyObject(reply);
 			continue;
 		}
 		freeReplyObject(reply);
@@ -230,8 +233,9 @@ void add_rules(char *rule_info)
 				redisAppendCommand(context, "hset rule:%s:value %s %s",rule_hash,name,value);
 			}
 		}
+		redisAppendCommand(context, "sadd rule:list %s",rule_hash);
 		
-		for(j=0;j<k;j++)
+		for(j=0;j<k+1;j++)
 		{
 			redisGetReply(context,(void **)&reply);
 			freeReplyObject(reply);
@@ -294,8 +298,9 @@ void add_rules(char *rule_info)
 			
 	
 		}
-		
-
+		free(temp_events);
+		free(temp_actions);
+		free(rule_hash);
 	
 	}	
 	
@@ -306,7 +311,7 @@ void rule_detect(const char* event_id){
 	redisReply* r;
 
         //get from event:id:rules
-    	r = (redisReply*)redisCommand(context, "SMEMBERS events:%s:rules",event_id); 
+    	r = (redisReply*)redisCommand(context, "SMEMBERS event:%s:rules",event_id); 
     	int i=0;
 	for(;i<r->elements;i++)
 	{
@@ -361,15 +366,14 @@ void device_state_income(const char* device_info)//const char* uid,const char* s
 		{
 			printf("nothing changed!!\n");
 			freeReplyObject(r);
-			redisGetReply(context,(void **)&r);
-			freeReplyObject(r);
+			cJSON_Delete(json);
 			return;
 		}
 		freeReplyObject(r);
 
 		
 		//add otherinfo of device if first add
-		if(pass)
+		if(1)
 		{
 			int whole_info=cJSON_GetArraySize(temp_dev);
 			int tempv=0;
@@ -379,8 +383,6 @@ void device_state_income(const char* device_info)//const char* uid,const char* s
 				char *json_name=temp_json->string;
 				char *json_value=temp_json->valuestring;
 				redisAppendCommand(context, "hset device:%s %s %s",uid,json_name,json_value);
-			
-				
 			}
 			tempv=0;
 			redisReply* temp_r;
@@ -512,11 +514,11 @@ int main(int argc,char *argv[])
     	t_start=clock();
 	add_event("{\"type\":\"PIR\",\"uid\":\"001\",\"state\":\"1\",\"admin\":\"aaa\"}");
 	add_event("{\"type\":\"PIR\",\"uid\":\"002\",\"state\":\"1\",\"admin\":\"aaa\"}");
-	//add_action("{\"url\":\"hjshi84@163.com\",\"body\":\"give my five\",\"others\":\"things\",\"admin\":\"aaa\"}");
+	add_action("{\"url\":\"hjshi84@163.com\",\"body\":\"give my five\",\"others\":\"things\",\"admin\":\"aaa\"}");
 	add_rules("[{\"name\": \"1\",\"events\": [{\"uid\":\"001\",\"id\":\"ae2bac2e4b4da805d01b2952d7e35ba4\",\"name\":\"1\"},{\"uid\":\"002\",\"id\":\"d9f5e405a7f74ed652a8f0b31a87f636\",\"name\":\"2\"}],\"actions\": [{\"id\":\"1\", \"name\":\"action_a\"},{\"id\":\"5\", \"name\":\"action_b\"}] ,\"enable\": \"0\",\"repeatable\": \"0\",\"time_constr\":  \"this\",\"admin\": \"admin@inesa.com\"}]");
 	////device_state_income("[{\"name\":\"People%20In\",\"uid\":\"10.200.45.148\",\"state\":\"100\"}]");    
-	//device_state_income("[{\"name\":\"People%20In\",\"uid\":\"001\",\"state\":\"1\"}]"); 
-	//device_state_income("[{\"name\":\"People%20In\",\"uid\":\"002\",\"state\":\"1\"}]"); 
+	device_state_income("[{\"name\":\"People%20In\",\"uid\":\"001\",\"state\":\"1\"}]"); 
+	device_state_income("[{\"name\":\"People%20In\",\"uid\":\"002\",\"state\":\"1\"}]"); 
 	t_end=clock();
 	
 	/**/
@@ -529,7 +531,7 @@ int main(int argc,char *argv[])
 	
 	
  	printf("%lf\n", (double)(t_end-t_start)/CLOCKS_PER_SEC);
- 	//closeConnect();
+ 	closeConnect();
 	return 0;  
 }  
 
