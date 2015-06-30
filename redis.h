@@ -11,13 +11,17 @@ typedef struct {
 
 static redisContext* context=NULL;
 static char json_value[100];
+
+static int closeCal=0;
+#define CLOSETHRES 1000
+
 char* results=NULL;
 
 
 int combine_user(const char *combine_info);
 int add_user(const char* user_info);
 int add_application(const char* app_info);
-void device_state_income(const char* content);
+char* device_state_income(const char* content);
 char* rule_detect(const char* event_id);
 void add_rules(const char *rule_info);
 
@@ -29,10 +33,17 @@ int delete_rule_by_user(char *rule_hash,char *app, char *user);
 char* get_events_total(char *app, char* userid);
 char* get_actions_total(char *app, char* userid);
 char* get_rules_total(char *app, char* userid);
+char* get_events_totalhash(char *app_hash, char* user_hash);
+char* get_actions_totalhash(char *app_hash, char* user_hash);
+char* get_rules_totalhash(char *app_hash, char* user_hash);
+
 	
 char* get_events_bind(char *app, char* userid);
 char* get_actions_bind(char *app, char* userid);
 char* get_rules_bind(char *app, char* userid);
+char* get_events_bindhash(char *app_hash,char* user_hash);
+char* get_actions_bindhash(char *app_hash,char* user_hash);
+char* get_rules_bindhash(char *app_hash,char* user_hash);
 
 int delete_app(char *app_hash);
 int delete_user(char *user_hash);

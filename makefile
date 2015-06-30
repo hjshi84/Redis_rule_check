@@ -13,7 +13,7 @@
 
 LIBDIR= -L/home/hjshi/work/code/c/redis -L/usr/local/lib  
 LIBSO = -lhiredis -lm -luuid
-CFLAG = -fPIC -g -O2
+CFLAG = -fPIC -g 
 
 all:libta.so redista
 
@@ -21,7 +21,7 @@ redista:redis.o libta.so md5.o  cJSON.o
 	gcc ${CFLAG} -o $@ $< -lta  ${LIBDIR} ${LIBSO} 
 
 libta.so:redis.o list.o md5.o cJSON.o
-	gcc ${CFLAG} -shared -g -O2 -o $@ $^ ${LIBDIR} ${LIBSO} 
+	gcc ${CFLAG} -shared -g -o $@ $^ ${LIBDIR} ${LIBSO} 
 
 %o:%c
 	gcc ${CFLAG} -c -o $@ $^
