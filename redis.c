@@ -3108,7 +3108,8 @@ int closeConnect()
 		redisFree(context);
 		context=NULL;
 		closeCal=0;
-		printf("connect close!\n");
+		createConnect();
+		printf("connect refresh!\n");
 	}
 	return 1;
 }
