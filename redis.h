@@ -45,8 +45,8 @@ char* get_events_bindhash(char *app_hash,char* user_hash);
 char* get_actions_bindhash(char *app_hash,char* user_hash);
 char* get_rules_bindhash(char *app_hash,char* user_hash);
 
-int delete_app(char *app_hash);
-int delete_user(char *user_hash);
+int delete_apphash(char *app_hash);
+int delete_userhash(char *user_hash);
 int delete_action(char *action_hash);
 int delete_event(char *event_hash);
 int delete_rule(char *rule_hash);
