@@ -3,13 +3,6 @@
 
 #include <hiredis/hiredis.h>  
 #include "list.h"
-
-#define REDISIP "10.200.43.156"
-//#define REDISIP "127.0.0.1"
-#define REDISPORT 6379
-#define REDISTABLE 3
-
-
 #define MAX_DEV_LEN 100
 typedef struct {  
         long int msg_type; 
@@ -19,14 +12,11 @@ typedef struct {
 static redisContext* context=NULL;
 static char json_value[100];
 
-#define MAXIDLENGTH 65
-
 static int closeCal=0;
 #define CLOSETHRES 1000
 
 char* results=NULL;
 
-#define ADD_AUTO_UPDATE 0
 
 int combine_user(const char *combine_info);
 int add_user(const char* user_info);
@@ -40,8 +30,6 @@ int delete_action_by_user(char *action_hash,char *app, char *user);
 int delete_rule_by_user(char *rule_hash,char *app, char *user);
 
 
-char *find_id(char *type,char *hash);
-//char *get_id_value(char *type,char *hash);
 char* get_events_total(char *app, char* userid);
 char* get_actions_total(char *app, char* userid);
 char* get_rules_total(char *app, char* userid);
@@ -56,12 +44,9 @@ char* get_rules_bind(char *app, char* userid);
 char* get_events_bindhash(char *app_hash,char* user_hash);
 char* get_actions_bindhash(char *app_hash,char* user_hash);
 char* get_rules_bindhash(char *app_hash,char* user_hash);
-char* get_update_ruleHash_from_id(const char* id, const char* pre_hash,const char* new_hash);
-void update_rule_by_event(char* user_id,char* pre_event_id,char *event_hash);
-char* get_uuid();
-void copy_data(char *type,const char* pre_hash,const char *new_hash);
-int delete_apphash(char *app_hash);
-int delete_userhash(char *user_hash);
+
+int delete_app(char *app_hash);
+int delete_user(char *user_hash);
 int delete_action(char *action_hash);
 int delete_event(char *event_hash);
 int delete_rule(char *rule_hash);
