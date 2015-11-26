@@ -199,7 +199,7 @@ void add_event(char *event_info)
 	if (reply->type==4)
 	{
 		//if not exists then add a new one
-
+		printf("add 1 @add 1\r\n");
 		redisAppendCommand(context, "hset event:list %s %s",event_hash,app_hash);
 		redisAppendCommand(context, "hset device:%s:stateslist %s %s",uid_value,state_value,event_hash);
 		redisAppendCommand(context, "HINCRBY event:%s:value referCount 1",event_hash);
@@ -228,8 +228,9 @@ void add_event(char *event_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:event:%s",user_hash,event_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==2&&reply->integer==0)
+			if(reply->type==2&&reply->elements==0)
 			{
+				printf("add 1 @add 2\r\n");
 				redisAppendCommand(context, "HINCRBY event:%s:value referCount 1",event_hash);
 
 				k++;
@@ -578,7 +579,7 @@ void update_event(char *pre_event_hash,char *event_info)
 	if (reply->type==4)
 	{
 		//if not exists then add a new one
-
+		printf("add 1 @update 1\r\n");
 		redisAppendCommand(context, "hset event:list %s %s",event_hash,app_hash);
 		redisAppendCommand(context, "hset device:%s:stateslist %s %s",uid_value,state_value,event_hash);
 		redisAppendCommand(context, "HINCRBY event:%s:value referCount 1",event_hash);
@@ -607,8 +608,9 @@ void update_event(char *pre_event_hash,char *event_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:event:%s",user_hash,event_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==2&&reply->integer==0)
+			if(reply->type==2&&reply->elements==0)
 			{
+				printf("add 1 @update 2\r\n");
 				redisAppendCommand(context, "HINCRBY event:%s:value referCount 1",event_hash);
 
 				k++;
@@ -899,7 +901,7 @@ void update_action(char *pre_action_hash,char *action_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:action:%s",user_hash,action_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==2&&reply->integer==0)
+			if(reply->type==2&&reply->elements==0)
 			{
 				redisAppendCommand(context, "HINCRBY action:%s:value referCount 1",action_hash);
 				k++;
@@ -1082,7 +1084,7 @@ void add_action(char *action_info)
 			freeReplyObject(reply);
 			redisAppendCommand(context, "keys user:%s:action:%s",user_hash,action_hash);
 			redisGetReply(context,(void **)&reply);
-			if(reply->type==2&&reply->integer==0)
+			if(reply->type==2&&reply->elements==0)
 			{
 				redisAppendCommand(context, "HINCRBY action:%s:value referCount 1",action_hash);
 				k++;
@@ -2188,7 +2190,7 @@ char* device_state_income(const char* device_info)//const char* uid,const char* 
 		
 		redisReply* r;
 
-		char *last_state;
+		char *last_state=NULL;
 		redisAppendCommand(context, "hget device:%s state",uid);
 		//redisAppendCommand(context, "hset device:%s state %s",uid,state);
 	
@@ -2230,7 +2232,7 @@ char* device_state_income(const char* device_info)//const char* uid,const char* 
 				freeReplyObject(temp_r);
 			}
 		}
-		printf("last_state is :%s\r\n",last_state);
+		
 		printf("state is :%s\r\n",state);
 
 		if (last_state!=NULL&&strcmp(last_state,state))
@@ -2283,8 +2285,8 @@ char* device_state_income(const char* device_info)//const char* uid,const char* 
 			freeReplyObject(r);
 			rule_detect(event_id);
 		}
-	
-		free(last_state);
+		if (last_state!=NULL)
+			free(last_state);
 		free(event_id);
 	
 	}
@@ -4326,6 +4328,30 @@ char* get_apps_and_users()
 
 }
 
+
+int add_device_desc_by_provider(const char* device_desc,const char* provider)
+{
+
+	return 0;
+}
+int add_device_desc_by_providerHash(const char* device_desc,const char* provider)
+{
+
+	return 0;
+}
+int add_device_desc_by_user(const char* device_desc,const char* provider)
+{
+	
+	return 0;
+}
+int add_device_desc_by_userHash(const char* device_desc,const char* provider)
+{
+	return 0;
+}
+
+
+
+
 int createConnect()
 {
 	redisReply *reply;
@@ -4402,6 +4428,7 @@ int main(int argc,char *argv[])
     	add_user("[{\"app\":\"istack\",\"userid\":\"demo\",\"role\":\"1\"}]");
     	add_user("[{\"app\":\"istack\",\"userid\":\"admin\",\"role\":\"0\"}]");
     	get_events_total("istack", "admin");
+    	device_state_income("[{\"name\":\"People in\",\"uid\":\"2\",\"state\":\"1\"}]");
     	//get_actions_bind("istack","admin");    
     	//device_state_income("[{\"uid\":\"10.200.44.80\",\"type\":\"\",\"state\":1,\"admin\":\"Test_Admin\"}]");
     	//enable_rule("{\"enable\":1,\"rule\":\"6d02c8622f70fc54dab6ac7344f23989\"}");

@@ -31,6 +31,12 @@ char* results=NULL;
 int combine_user(const char *combine_info);
 int add_user(const char* user_info);
 int add_application(const char* app_info);
+
+int add_device_desc_by_provider(const char* device_desc,const char* provider);
+int add_device_desc_by_providerHash(const char* device_desc,const char* provider);
+int add_device_desc_by_user(const char* device_desc,const char* provider);
+int add_device_desc_by_userHash(const char* device_desc,const char* provider);
+
 char* device_state_income(const char* content);
 char* rule_detect(const char* event_id);
 void add_rules(const char *rule_info);
